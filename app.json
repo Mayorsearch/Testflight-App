@@ -1,0 +1,13 @@
+{
+  "name": "iMediaSave",
+  "displayName": "iMediaSave",
+  "version": "1.0.0",
+  "buildNumber": "1",
+  "versionCode": "1",
+  "ios": {
+    "bundleIdentifier": "com.imediasave.app"
+  },
+  "android": {
+    "package": "com.imediasave.app"
+  }
+}

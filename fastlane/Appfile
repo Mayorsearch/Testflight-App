@@ -1,0 +1,16 @@
+# frozen_string_literal: true
+
+# ==============================================================================
+# iMediaSave — Fastlane Appfile
+# Shared app identifiers for all lanes.
+# Override per-lane using explicit parameters where needed.
+# ==============================================================================
+
+# iOS
+app_identifier(ENV['IOS_BUNDLE_ID'] || 'com.imediasave.app')
+apple_id(ENV['APPLE_ID'] || '')
+itc_team_id(ENV['APP_STORE_CONNECT_TEAM_ID'] || '')
+team_id(ENV['APPLE_TEAM_ID'] || '')
+
+# Android
+# package_name is set per lane via ENV['ANDROID_PACKAGE_NAME']

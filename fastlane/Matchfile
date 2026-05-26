@@ -1,0 +1,21 @@
+# frozen_string_literal: true
+
+# ==============================================================================
+# iMediaSave — Fastlane Matchfile
+# Configures code signing sync via `match` (recommended: readonly in CI).
+# See: https://docs.fastlane.tools/actions/match/
+#
+# Prerequisites:
+#   - A private GitHub repo dedicated to encrypted certificates/profiles.
+#   - MATCH_PASSWORD stored in GitHub Secrets.
+#   - MATCH_GIT_URL stored in GitHub Secrets (URL of the certs repo).
+# ==============================================================================
+
+git_url(ENV['MATCH_GIT_URL'] || '')
+storage_mode('git')
+type('appstore')           # use 'development' locally; CI uses 'appstore'
+app_identifier([
+  ENV['IOS_BUNDLE_ID'] || 'com.imediasave.app',
+])
+username(ENV['APPLE_ID'] || '')
+readonly(true)             # CI is read-only; only rotate certs manually
