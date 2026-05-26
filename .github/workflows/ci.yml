@@ -123,7 +123,7 @@ jobs:
           cd ios && pod install --repo-update
 
       - name: Build iOS (no signing)
-        if: hashFiles('ios/iMediaSave.xcworkspace/contents.xcworkspacedata') != ''
+        if: hashFiles('ios/Podfile') != ''
         run: |
           xcodebuild \
             -workspace ios/iMediaSave.xcworkspace \

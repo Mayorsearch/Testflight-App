@@ -103,6 +103,6 @@ export const typography: Record<string, TextStyle> = {
     lineHeight: 16,
     fontWeight: '500',
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    textTransform: 'uppercase' as const,
   },
 };

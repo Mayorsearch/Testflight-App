@@ -31,6 +31,9 @@ export interface AppConfig {
 
 // ─── Required keys — app will throw at startup if missing ────────────────────
 
+// Required keys — app will throw at startup if missing.
+// Keep this list in sync with the AppConfig interface above when adding
+// new required properties.
 const REQUIRED_KEYS = ['APP_ENV', 'APP_NAME', 'API_BASE_URL'] as const;
 
 // ─── Validation ──────────────────────────────────────────────────────────────

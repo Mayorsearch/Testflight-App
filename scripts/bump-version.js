@@ -65,7 +65,12 @@ if (argMap.version && argMap.version !== true) {
 
 const buildNumber = (argMap.build && argMap.build !== true)
   ? String(argMap.build)
-  : (process.env.BUILD_NUMBER || String(Date.now()));
+  : (process.env.BUILD_NUMBER || (() => {
+      // Fallback: YYYYMMDDHHMM format — stays well within Android's 2,100,000,000 max
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}`;
+    })());
 
 console.log(`Version: ${currentVersion} → ${newVersion}`);
 console.log(`Build:   ${buildNumber}`);
