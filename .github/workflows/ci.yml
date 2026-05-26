@@ -30,6 +30,8 @@ jobs:
   lint:
     name: Lint & Type-check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,6 +55,8 @@ jobs:
   test:
     name: Jest Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -82,6 +86,8 @@ jobs:
     name: iOS Build Check
     runs-on: macos-14
     needs: [lint, test]
+    permissions:
+      contents: read
     env:
       APP_ENV: dev
       APP_NAME: iMediaSave Dev
@@ -112,11 +118,12 @@ jobs:
           bundler-cache: true
 
       - name: Install CocoaPods
+        if: hashFiles('ios/Podfile') != ''
         run: |
           cd ios && pod install --repo-update
-        continue-on-error: true  # Pods not yet configured — passes once ios/ is added
 
       - name: Build iOS (no signing)
+        if: hashFiles('ios/iMediaSave.xcworkspace/contents.xcworkspacedata') != ''
         run: |
           xcodebuild \
             -workspace ios/iMediaSave.xcworkspace \
@@ -126,13 +133,14 @@ jobs:
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
             | xcpretty
-        continue-on-error: true  # Will pass once ios/ folder is committed
 
   # ── Android Build Check ──────────────────────────────────────────────────────
   build-android:
     name: Android Build Check
     runs-on: ubuntu-latest
     needs: [lint, test]
+    permissions:
+      contents: read
     env:
       APP_ENV: dev
       APP_NAME: iMediaSave Dev
@@ -166,6 +174,6 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Build Android Debug
+        if: hashFiles('android/gradlew') != ''
         run: |
           cd android && ./gradlew assembleDebug --no-daemon
-        continue-on-error: true  # Will pass once android/ folder is committed

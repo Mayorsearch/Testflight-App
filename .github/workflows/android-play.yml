@@ -37,6 +37,8 @@ jobs:
     name: Build & Upload to Play Internal
     runs-on: ubuntu-latest
     environment: production   # Manual approval gate
+    permissions:
+      contents: read
 
     env:
       VERSION_NAME: ${{ github.event.inputs.version_name || '1.0.0' }}

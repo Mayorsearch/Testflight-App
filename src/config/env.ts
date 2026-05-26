@@ -31,11 +31,7 @@ export interface AppConfig {
 
 // ─── Required keys — app will throw at startup if missing ────────────────────
 
-const REQUIRED_KEYS: Array<keyof Pick<AppConfig, 'APP_ENV' | 'APP_NAME' | 'API_BASE_URL'>> = [
-  'APP_ENV',
-  'APP_NAME',
-  'API_BASE_URL',
-];
+const REQUIRED_KEYS = ['APP_ENV', 'APP_NAME', 'API_BASE_URL'] as const;
 
 // ─── Validation ──────────────────────────────────────────────────────────────
 

@@ -63,7 +63,7 @@ end
 platform :ios do
   before_all do |lane|
     # Ensure Xcode environment is configured
-    xcversion(version: ENV['XCODE_VERSION'] || '~> 15')
+    xcversion(version: ENV['XCODE_VERSION'] || '15.0') if ENV['XCODE_VERSION'] || ENV['CI']
   end
 
   desc 'Run iOS tests'

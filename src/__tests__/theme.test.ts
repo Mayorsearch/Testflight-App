@@ -2,7 +2,7 @@
  * Theme tokens unit tests
  */
 
-import {colors, spacing, typography, radii} from '../../theme';
+import {colors, spacing, typography, radii} from '../theme';
 
 describe('colors', () => {
   it('exports primary brand color', () => {

@@ -37,6 +37,8 @@ jobs:
     name: Build & Upload to TestFlight
     runs-on: macos-14
     environment: production   # Manual approval gate
+    permissions:
+      contents: read
 
     env:
       # Passed into Fastlane
