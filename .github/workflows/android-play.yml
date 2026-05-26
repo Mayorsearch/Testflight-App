@@ -1,0 +1,103 @@
+# ==============================================================================
+# iMediaSave — Android Play Internal Deployment Workflow
+#
+# Triggers:
+#   - Manual dispatch (workflow_dispatch)
+#   - Push to 'release/**' branches
+#
+# Required GitHub Secrets (set in Environment: "production"):
+#   See docs/CODE_SIGNING.md for the full list.
+#
+# Environment: "production" — requires manual approval gate before deploy.
+# ==============================================================================
+
+name: Android → Play Internal
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name (e.g. 1.2.0)'
+        required: true
+        default: '1.0.0'
+      release_notes:
+        description: 'Play Store release notes'
+        required: false
+        default: 'New build — see commit history for details.'
+  push:
+    branches:
+      - 'release/**'
+
+concurrency:
+  group: android-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-android:
+    name: Build & Upload to Play Internal
+    runs-on: ubuntu-latest
+    environment: production   # Manual approval gate
+    permissions:
+      contents: read
+
+    env:
+      VERSION_NAME: ${{ github.event.inputs.version_name || '1.0.0' }}
+      BUILD_NUMBER: ${{ github.run_number }}
+      RELEASE_NOTES: ${{ github.event.inputs.release_notes || 'New build — see commit history.' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install JS dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Bump version & version code
+        run: |
+          node scripts/bump-version.js \
+            --version "$VERSION_NAME" \
+            --build "$BUILD_NUMBER"
+
+      - name: Fastlane — Android beta lane
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_PLAY_JSON_KEY: ${{ secrets.GOOGLE_PLAY_JSON_KEY }}
+          ANDROID_PACKAGE_NAME: ${{ secrets.ANDROID_PACKAGE_NAME }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          APP_ENV: prod
+          API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
+        run: bundle exec fastlane android beta
+
+      - name: Upload build artifact (AAB)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iMediaSave-android-${{ github.run_number }}
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30

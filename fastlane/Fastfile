@@ -1,0 +1,219 @@
+# frozen_string_literal: true
+
+# ==============================================================================
+# iMediaSave — Fastfile
+#
+# Lanes:
+#   iOS:
+#     bundle exec fastlane ios tests          — run unit/UI tests
+#     bundle exec fastlane ios beta           — build + upload to TestFlight
+#     bundle exec fastlane ios release        — promote latest build to App Store
+#
+#   Android:
+#     bundle exec fastlane android tests      — run unit tests
+#     bundle exec fastlane android beta       — build AAB + upload to Play Internal
+#     bundle exec fastlane android promote    — promote Internal → Alpha/Beta
+#
+#   Shared:
+#     bundle exec fastlane validate           — lint + type-check + tests (both platforms)
+#
+# Required secrets (set as GitHub Actions Secrets):
+#   See docs/CODE_SIGNING.md for the full list.
+# ==============================================================================
+
+default_platform(:ios)
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def slack_notify(message:, success:)
+  webhook = ENV['SLACK_WEBHOOK_URL']
+  return if webhook.nil? || webhook.empty?
+
+  slack(
+    slack_url: webhook,
+    message: message,
+    success: success,
+    default_payloads: [:git_branch, :git_author, :last_git_commit_message],
+    attachment_properties: {
+      fields: [
+        {title: 'App', value: 'iMediaSave', short: true},
+        {title: 'Build', value: ENV['BUILD_NUMBER'] || 'N/A', short: true},
+        {title: 'Version', value: ENV['VERSION_NAME'] || 'N/A', short: true},
+      ],
+    },
+  )
+end
+
+def current_build_number
+  (ENV['BUILD_NUMBER'] || Time.now.strftime('%Y%m%d%H%M')).to_i
+end
+
+def current_version_name
+  ENV['VERSION_NAME'] || '1.0.0'
+end
+
+# ─── Shared lane ──────────────────────────────────────────────────────────────
+
+lane :validate do
+  sh('yarn validate', log: true)
+end
+
+# ─── iOS Platform ─────────────────────────────────────────────────────────────
+
+platform :ios do
+  before_all do |lane|
+    # Ensure Xcode environment is configured
+    xcversion(version: ENV['XCODE_VERSION'] || '15.0') if ENV['XCODE_VERSION'] || ENV['CI']
+  end
+
+  desc 'Run iOS tests'
+  lane :tests do
+    run_tests(
+      workspace: 'ios/iMediaSave.xcworkspace',
+      scheme: 'iMediaSave',
+      device: 'iPhone 15',
+      output_directory: './fastlane/test_output',
+      output_files: 'ios-tests.xml',
+    )
+  end
+
+  desc 'Build and upload a new beta build to TestFlight'
+  lane :beta do
+    # 1. Sync code signing certificates (read-only in CI)
+    match(
+      type: 'appstore',
+      readonly: true,
+    )
+
+    # 2. Bump build number
+    increment_build_number(
+      build_number: current_build_number,
+      xcodeproj: 'ios/iMediaSave.xcodeproj',
+    )
+
+    # 3. Update version name
+    increment_version_number(
+      version_number: current_version_name,
+      xcodeproj: 'ios/iMediaSave.xcodeproj',
+    )
+
+    # 4. Build
+    build_app(
+      workspace: 'ios/iMediaSave.xcworkspace',
+      scheme: 'iMediaSave',
+      configuration: 'Release',
+      export_method: 'app-store',
+      output_directory: './build/ios',
+      output_name: 'iMediaSave.ipa',
+      include_symbols: true,
+      include_bitcode: false,
+    )
+
+    # 5. Upload to TestFlight
+    upload_to_testflight(
+      api_key_path: ENV['APP_STORE_CONNECT_API_KEY_PATH'] || './fastlane/api_key.json',
+      skip_waiting_for_build_processing: true,
+      changelog: ENV['RELEASE_NOTES'] || 'New build — see commit history.',
+    )
+
+    # 6. Notify
+    slack_notify(
+      message: "✅ iOS build #{current_build_number} uploaded to TestFlight successfully.",
+      success: true,
+    )
+  end
+
+  error do |lane, exception|
+    slack_notify(
+      message: "❌ iOS lane `#{lane}` failed: #{exception.message}",
+      success: false,
+    )
+    UI.error("iOS lane #{lane} failed: #{exception.message}")
+  end
+end
+
+# ─── Android Platform ─────────────────────────────────────────────────────────
+
+platform :android do
+  desc 'Run Android tests'
+  lane :tests do
+    gradle(
+      task: 'test',
+      project_dir: 'android/',
+      flavor: 'prod',
+      build_type: 'Release',
+    )
+  end
+
+  desc 'Build and upload AAB to Play Internal testing track'
+  lane :beta do
+    # 1. Decode keystore from base64 secret
+    keystore_path = '/tmp/imediasave-release.keystore'
+    sh("echo $ANDROID_KEYSTORE_BASE64 | base64 --decode > #{keystore_path}")
+
+    # 2. Bump version code
+    android_set_version_code(
+      version_code: current_build_number,
+      gradle_file: 'android/app/build.gradle',
+    )
+
+    android_set_version_name(
+      version_name: current_version_name,
+      gradle_file: 'android/app/build.gradle',
+    )
+
+    # 3. Build signed AAB
+    gradle(
+      task: 'bundle',
+      build_type: 'Release',
+      project_dir: 'android/',
+      properties: {
+        'android.injected.signing.store.file' => keystore_path,
+        'android.injected.signing.store.password' => ENV['ANDROID_KEYSTORE_PASSWORD'],
+        'android.injected.signing.key.alias' => ENV['ANDROID_KEY_ALIAS'],
+        'android.injected.signing.key.password' => ENV['ANDROID_KEY_PASSWORD'],
+      },
+    )
+
+    # 4. Upload to Play Internal track
+    upload_to_play_store(
+      track: 'internal',
+      aab: 'android/app/build/outputs/bundle/release/app-release.aab',
+      json_key_data: ENV['GOOGLE_PLAY_JSON_KEY'],
+      package_name: ENV['ANDROID_PACKAGE_NAME'] || 'com.imediasave.app',
+      release_status: 'draft',
+    )
+
+    # 5. Clean up keystore
+    sh("rm -f #{keystore_path}")
+
+    # 6. Notify
+    slack_notify(
+      message: "✅ Android build #{current_build_number} uploaded to Play Internal track.",
+      success: true,
+    )
+  end
+
+  desc 'Promote Internal build to Alpha track'
+  lane :promote do
+    upload_to_play_store(
+      track: 'internal',
+      track_promote_to: 'alpha',
+      json_key_data: ENV['GOOGLE_PLAY_JSON_KEY'],
+      package_name: ENV['ANDROID_PACKAGE_NAME'] || 'com.imediasave.app',
+    )
+
+    slack_notify(
+      message: "✅ Android build promoted from Internal → Alpha.",
+      success: true,
+    )
+  end
+
+  error do |lane, exception|
+    slack_notify(
+      message: "❌ Android lane `#{lane}` failed: #{exception.message}",
+      success: false,
+    )
+    UI.error("Android lane #{lane} failed: #{exception.message}")
+  end
+end
